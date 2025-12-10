@@ -11,7 +11,7 @@ logs/
 *.tmp
 
 keys/*.json
-*.key
+*.gcp
 .env
 
 data/*.csv
