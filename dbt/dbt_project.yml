@@ -1,0 +1,10 @@
+name: etl_dbt_with_airflow
+version: "1.0"
+config-version: 2
+
+profile: my_profile
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+analysis-paths: ["analysis"]
+test-paths: ["tests"]

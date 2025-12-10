@@ -1,0 +1,9 @@
+my_profile:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: etl-with-airflow
+      dataset: etl_airflow_dataset
+      keyfile: /opt/airflow/keys/service_account.json
