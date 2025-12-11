@@ -1,0 +1,7 @@
+version: 2
+
+sources:
+  - name: raw_data
+    schema: etl_airflow_dataset
+    tables:
+      - name: green_tripdata_2021_01

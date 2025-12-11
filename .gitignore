@@ -10,15 +10,18 @@ logs/
 *.log
 *.tmp
 
-keys/*.json
-*.gcp
+gcp/*.json
+*.key
 .env
 
-data/*.csv
-data/*.csv.gz
+data/raw/*.csv
+data/raw/*.csv.gz
+airflow/dags/data/*.csv
+airflow/dags/data/*.csv.gz
 
 dbt/target/
 dbt/logs/
+dbt/profiles/.user.yml
 
 .vscode/
 .idea/
