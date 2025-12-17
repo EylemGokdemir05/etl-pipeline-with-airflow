@@ -1,3 +1,14 @@
+{{
+  config(
+    materialized='incremental',
+    unique_key='trip_date',
+    partition_by={
+      "field": "trip_date",
+      "data_type": "date"
+    }
+  )
+}}
+
 with trip_data as (
 
     select *
@@ -7,7 +18,7 @@ with trip_data as (
 aggregated as (
 
     select
-        date_trunc(pickup_datetime, day) as trip_date,
+        date(pickup_datetime) as trip_date,
         count(*) as total_trips,
         avg(trip_distance) as avg_distance,
         avg(total_amount) as avg_total_amount

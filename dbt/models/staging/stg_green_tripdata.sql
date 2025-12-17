@@ -1,3 +1,5 @@
+{{ config(materialized='view') }}
+
 with source as (
 
     select *
@@ -28,6 +30,8 @@ renamed as (
         cast(trip_type as int) as trip_type,
         cast(congestion_surcharge as float64) as congestion_surcharge
     from source
+    where lpep_pickup_datetime is not null
+       and lpep_dropoff_datetime is not null
 
 )
 select * from renamed

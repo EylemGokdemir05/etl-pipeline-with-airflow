@@ -1,55 +1,63 @@
 version: '3.8'
+name: etl-pipeline-with-airflow
 
 services:
   postgres:
-   image: postgres:15
-   restart: unless-stopped
-   environment:
-    POSTGRES_USER: airflow
-    POSTGRES_PASSWORD: airflow
-    POSTGRES_DB: airflow
-   volumes:
-    - ./postgres-init:/docker-entrypoint-initdb.d:ro
-    - postgres_data:/var/lib/postgresql/data
-   healthcheck:
-    test: ["CMD-SHELL", "pg_isready -U airflow"]
-    interval: 10s
-    timeout: 5s
-    retries: 5
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - airflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dind:
+    image: docker:24-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2375/_ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - dind-data:/var/lib/docker
+      - ./airflow:/opt/airflow
+      - ./dbt:/opt/airflow/dbt
+      - ./gcp:/opt/airflow/keys
+      - ./data:/opt/airflow/data
+    networks:
+      - airflow-network
+
   airflow-webserver:
     image: apache/airflow:2.7.1
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      dind:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      # AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: "true"
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./data:/opt/airflow/data  # Veri dosyalarını mount et (opsiyonel)
-      - ./requirements.txt:/requirements.txt
-      # - ./dbt:/opt/airflow/dbt    # dbt project'i mount et (opsiyonel)
-      # - ./gcp/service-account.json:/opt/airflow/gcp-key.json:ro  # GCP servis hesabı anahtarını mount et (opsiyonel)
-    ports:
-      - "8080:8080"
-    command: >
-      bash -c "pip install --user -r /requirements.txt &&
-               airflow db init &&
-               airflow webserver"
-  airflow-scheduler:
-    image: apache/airflow:2.7.1
-    depends_on:
-      - airflow-webserver
-      - postgres
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: "true"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      AIRFLOW__WEBSERVER__SECRET_KEY: "my_super_secret_key_123"
+      DOCKER_HOST: tcp://dind:2375
+      DOCKER_TLS_VERIFY: "0"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -57,20 +65,63 @@ services:
       - ./requirements.txt:/requirements.txt
       - ./dbt:/opt/airflow/dbt
       - ./gcp:/opt/airflow/keys
-      - ./data:/opt/airflow/data  # Veri dosyalarını mount et (opsiyonel)
-    command: >
-      bash -c "pip install --user -r /requirements.txt &&
-               airflow db init &&
-               airflow scheduler"
+      - ./data:/opt/airflow/data
+    networks:
+      - airflow-network
+    ports:
+      - "8080:8080"
+    command: bash -c "
+        pip install --user -r /requirements.txt && \
+        airflow db init && \
+        exec airflow webserver"
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dind:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "true"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      AIRFLOW__WEBSERVER__SECRET_KEY: "my_super_secret_key_123"
+      DOCKER_HOST: tcp://dind:2375
+      DOCKER_TLS_VERIFY: "0"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./requirements.txt:/requirements.txt
+      - ./dbt:/opt/airflow/dbt
+      - ./gcp:/opt/airflow/keys
+      - ./data:/opt/airflow/data
+    networks:
+      - airflow-network
     restart: unless-stopped
+    command: bash -c "
+        pip install --user -r /requirements.txt && \
+        exec airflow scheduler"
+
   dbt:
     image: ghcr.io/dbt-labs/dbt-bigquery:1.7.latest
     volumes:
       - ./dbt:/app
       - ./gcp:/opt/airflow/keys
+    networks:
+      - airflow-network
     environment:
       DBT_PROFILES_DIR: /app/profiles
     working_dir: /app
     entrypoint: [ "tail", "-f", "/dev/null" ]
+
 volumes:
   postgres_data:
+  dind-data:
+
+networks:
+  airflow-network:
+    driver: bridge
