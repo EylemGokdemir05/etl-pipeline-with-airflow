@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: fct_green_trip_summary
+    description: "Green taxi trip summary fact table"
+    columns:
+      - name: trip_date
+        description: "Date of the trip"
+        tests:
+          - not_null
+          - unique
+      - name: total_trips
+        tests:
+          - not_null
+          - not_negative
+      - name: avg_distance
+        tests:
+          - not_null
+          - not_negative
+      - name: avg_total_amount
+        tests:
+          - not_null
+          - not_negative

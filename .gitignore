@@ -19,9 +19,12 @@ data/raw/*.csv.gz
 airflow/dags/data/*.csv
 airflow/dags/data/*.csv.gz
 
+# dbt dependencies
 dbt/target/
 dbt/logs/
 dbt/profiles/.user.yml
+dbt_packages/
+data/dbt_docs
 
 .vscode/
 .idea/
